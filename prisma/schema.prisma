@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  PROVIDER
+  ADMIN
+}
+enum AppointmentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+enum DocumentType {
+  LAB_REPORT
+  PRESCRIPTION
+  IMAGING
+  OTHER
+}
+
+model User {
+  id              String             @id @default(cuid())
+  email           String             @unique
+  passwordHash    String
+  role            Role               @default(PATIENT)
+  name            String
+  phone           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  patientProfile  PatientProfile?
+  providerProfile ProviderProfile?
+  appointmentsAsPatient Appointment[] @relation("patientAppointments")
+  appointmentsAsProvider Appointment[] @relation("providerAppointments")
+  availabilities  ProviderAvailability[]
+  documents       MedicalDocument[]
+  conversations   AiConversation[]
+  reminders       MedicationReminder[]
+  auditEvents     AuditEvent[]
+}
+
+model PatientProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  county    String?
+  dateOfBirth DateTime?
+  allergies String?
+}
+
+model ProviderProfile {
+  id           String @id @default(cuid())
+  userId       String @unique
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialty    String
+  licenseNumber String?
+  facilityId   String?
+  facility     Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+}
+
+model Facility {
+  id          String @id @default(cuid())
+  name        String
+  type        String
+  county      String
+  address     String
+  phone       String?
+  services    String[]
+  openingHours String?
+  verified    Boolean @default(false)
+  latitude    Float?
+  longitude   Float?
+  providers   ProviderProfile[]
+  createdAt   DateTime @default(now())
+  @@index([county])
+  @@index([name])
+}
+
+model Appointment {
+  id          String @id @default(cuid())
+  patientId   String
+  providerId  String
+  startAt     DateTime
+  endAt       DateTime
+  reason      String
+  status      AppointmentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  patient     User @relation("patientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  provider    User @relation("providerAppointments", fields: [providerId], references: [id], onDelete: Cascade)
+  @@index([patientId, status])
+  @@index([providerId, startAt])
+  @@unique([providerId, startAt])
+}
+
+model ProviderAvailability {
+  id         String @id @default(cuid())
+  providerId String
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+  provider   User @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  @@index([providerId, dayOfWeek])
+}
+
+model MedicalDocument {
+  id           String @id @default(cuid())
+  ownerId      String
+  name         String
+  storageKey   String
+  contentType  String
+  sizeBytes    Int
+  documentType DocumentType @default(OTHER)
+  createdAt    DateTime @default(now())
+  owner        User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@index([ownerId, createdAt])
+}
+
+model AiConversation {
+  id        String @id @default(cuid())
+  userId    String
+  title     String?
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MedicationReminder {
+  id          String @id @default(cuid())
+  userId      String
+  medication  String
+  instructions String
+  times       String[]
+  startDate   DateTime
+  endDate     DateTime?
+  active      Boolean @default(true)
+  history     Json @default("[]")
+  createdAt   DateTime @default(now())
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, active])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([userId, createdAt])
+}

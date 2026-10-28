@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server"; import { prisma } from "@/lib/prisma"; import { jsonError } from "@/lib/http";
+export const dynamic = "force-dynamic";
+export async function GET(request: Request) { try { const url = new URL(request.url); const q = url.searchParams.get("q") || ""; const county = url.searchParams.get("county") || ""; const facilities = await prisma.facility.findMany({ where: { AND: [{ name: { contains: q, mode: "insensitive" } }, county ? { county: { equals: county, mode: "insensitive" } } : {}] }, orderBy: [{ verified: "desc" }, { name: "asc" }], take: 50 }); return NextResponse.json({ facilities }); } catch (error) { return jsonError(error); } }
